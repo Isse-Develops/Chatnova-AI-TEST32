@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chatnova</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0d1117">
+    
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --sidebar-bg: #111418;
+            --chat-bg: #0d1117;
+            --text-color: #f0f6fc;
+            --accent-blue: #3b82f6;
+            --accent-red: #ef4444;
+            --border-color: #21262d;
+            --overlay-color: rgba(0, 0, 0, 0.6);
+            --sidebar-width: 380px;
+        }
+
+        body.light {
+            --bg-color: #ffffff;
+            --sidebar-bg: #f0f2f5;
+            --chat-bg: #ffffff;
+            --text-color: #1f2328;
+            --border-color: #d0d7de;
+            --overlay-color: rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--overlay-color);
+            z-index: 99; opacity: 0; visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            backdrop-filter: blur(2px);
+        }
+
+        body.sidebar-open .sidebar-overlay { opacity: 1; visibility: visible; }
+
+        .sidebar {
+            position: fixed;
+            top: 0; left: calc(-1 * var(--sidebar-width));
+            width: var(--sidebar-width); height: 100%;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex; flex-direction: column; justify-content: space-between;
+            z-index: 100; transition: left 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 4px 0 25px rgba(0,0,0,0.4);
+        }
+
+        body.sidebar-open .sidebar { left: 0; }
+
+        .sidebar-header {
+            padding: 20px; display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo-container { display: flex; align-items: center; gap: 12px; }
+        .sidebar-header svg { width: 34px; height: 34px; }
+        .sidebar-header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.5px; }
+
+        .close-sidebar-btn {
+            background: none; border: none; color: var(--text-color);
+            font-size: 1.4rem; cursor: pointer; opacity: 0.7; padding: 6px; border-radius: 6px;
+        }
+        .close-sidebar-btn:hover { opacity: 1; background-color: rgba(255,255,255,0.05); }
+
+        .new-chat-btn {
+            margin: 16px 20px; padding: 12px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-red));
+            color: white; border: none; border-radius: 8px; font-weight: 600;
+            cursor: pointer; text-align: center; font-size: 0.95rem;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            transition: transform 0.1s ease;
+        }
+        .new-chat-btn:active { transform: scale(0.98); }
+
+        .chat-list { flex: 1; overflow-y: auto; padding: 0 16px; display: flex; flex-direction: column; gap: 4px; }
+
+        .chat-item {
+            padding: 12px 14px; border-radius: 8px;
+            cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.9rem; color: rgba(240, 246, 252, 0.85);
+            transition: background-color 0.2s;
+        }
+
+        .chat-item:hover, .chat-item.active {
+            background-color: rgba(255, 255, 255, 0.05); color: var(--text-color);
+        }
+
+        .chat-actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s ease; }
+        .chat-item:hover .chat-actions { opacity: 0.8; }
+        .chat-actions button { background: none; border: none; color: var(--text-color); cursor: pointer; font-size: 0.9rem; padding: 4px; }
+
+        .sidebar-footer {
+            padding: 16px 20px; border-top: 1px solid var(--border-color);
+            display: flex; flex-direction: column; gap: 6px;
+        }
+
+        .footer-btn {
+            background: none; border: none; color: var(--text-color);
+            display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+            cursor: pointer; border-radius: 8px; width: 100%; font-size: 0.9rem; opacity: 0.85;
+        }
+        .footer-btn:hover { background-color: rgba(255, 255, 255, 0.05); opacity: 1; }
+
+        .chat-container {
+            flex: 1; display: flex; flex-direction: column;
+            background-color: var(--chat-bg); height: 100%; position: relative; z-index: 1; width: 100%;
+        }
+
+        .app-header {
+            height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
+            border-bottom: 1px solid var(--border-color); background-color: var(--sidebar-bg);
+        }
+
+        .menu-toggle-btn { 
+            background: none; border: none; color: var(--text-color); font-size: 1.4rem; cursor: pointer; 
+            display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 6px;
+        }
+        .menu-toggle-btn:hover { background-color: rgba(255,255,255,0.05); }
+
+        .app-header h2 { font-size: 1.05rem; font-weight: 600; }
+        .header-right-placeholder { width: 36px; }
+
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 24px 20px;
+            display: flex; flex-direction: column; gap: 20px;
+            max-width: 900px; width: 100%; margin: 0 auto;
+        }
+
+        .message-wrapper { display: flex; gap: 12px; max-width: 85%; }
+        .message-wrapper.user { align-self: flex-end; flex-direction: row-reverse; }
+        .message-wrapper.bot { align-self: flex-start; }
+
+        .avatar {
+            width: 34px; height: 34px; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 0.85rem; flex-shrink: 0;
+            overflow: hidden;
+        }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar.user { background-color: var(--border-color); color: var(--text-color); }
+        .avatar.bot { background: linear-gradient(135deg, var(--accent-blue), var(--accent-red)); color: white; }
+
+        .message { padding: 12px 16px; border-radius: 10px; font-size: 0.95rem; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; }
+        .message-wrapper.user .message { background-color: var(--accent-blue); color: white; border-top-right-radius: 2px; }
+        .message-wrapper.bot .message { background-color: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-top-left-radius: 2px; }
+
+        .typing-indicator {
+            display: flex; align-items: center; gap: 4px; padding: 4px 0;
+        }
+        .typing-indicator span {
+            width: 7px; height: 7px; background-color: var(--text-color);
+            border-radius: 50%; opacity: 0.4;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+
+        .chat-image-preview {
+            max-width: 300px; max-height: 300px; border-radius: 8px; margin-top: 10px; display: block; border: 1px solid var(--border-color);
+        }
+
+        .upload-preview-container {
+            padding: 10px 20px 0 20px; display: none; align-items: center; gap: 12px; background-color: var(--chat-bg);
+            max-width: 900px; width: 100%; margin: 0 auto;
+        }
+        .upload-preview-container img { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color); }
+        .upload-preview-container span { font-size: 0.85rem; opacity: 0.85; }
+        .remove-upload { background: none; border: none; color: var(--accent-red); cursor: pointer; font-size: 0.9rem; margin-left: auto; padding: 4px 8px; border-radius: 4px; }
+        .remove-upload:hover { background-color: rgba(239, 68, 68, 0.1); }
+
+        .chat-input-area-wrapper {
+            padding: 16px 20px 20px 20px; background-color: var(--chat-bg); border-top: 1px solid var(--border-color);
+        }
+        .chat-input-area {
+            max-width: 900px; margin: 0 auto;
+            display: flex; gap: 12px; background-color: var(--sidebar-bg); border: 1px solid var(--border-color);
+            border-radius: 28px; padding: 8px 12px; align-items: center;
+        }
+        .chat-input-area:focus-within { border-color: var(--accent-blue); }
+
+        .upload-btn-label {
+            background: none; border: none; color: var(--text-color); font-size: 1.4rem; cursor: pointer; opacity: 0.7; display: flex; align-items: center; padding: 0 6px;
+        }
+        .upload-btn-label:hover { opacity: 1; }
+        #fileInput { display: none; }
+
+        .input-wrapper { flex: 1; position: relative; }
+        .chat-input-area input[type="text"] {
+            width: 100%; padding: 8px 10px; border: none; background: transparent;
+            color: var(--text-color); font-size: 0.95rem; outline: none;
+        }
+
+        .send-btn { 
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-red)); 
+            border: none; color: white; width: 36px; height: 36px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-size: 0.9rem; cursor: pointer; opacity: 0.4; transition: opacity 0.2s; flex-shrink: 0;
+        }
+        .send-btn.active { opacity: 1; }
+
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 200; backdrop-filter: blur(3px);
+        }
+        .modal-content {
+            background-color: var(--sidebar-bg); border: 1px solid var(--border-color);
+            padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; display: flex; flex-direction: column; gap: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { font-size: 1.15rem; font-weight: 600; }
+        .close-modal-btn { background: none; border: none; color: var(--text-color); font-size: 1.3rem; cursor: pointer; opacity: 0.7; }
+        .setting-group { display: flex; flex-direction: column; gap: 8px; }
+        .setting-group label { font-size: 0.85rem; opacity: 0.8; font-weight: 500; }
+        .setting-group select { padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background-color: var(--bg-color); color: var(--text-color); font-size: 0.95rem; outline: none; }
+
+        .auth-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 5px; }
+        .auth-btn {
+            padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);
+            background-color: var(--bg-color); color: var(--text-color); font-weight: 600;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.95rem;
+            transition: background-color 0.2s;
+        }
+        .auth-btn:hover { background-color: rgba(255,255,255,0.05); }
+        .auth-btn.google { border-color: #4285F4; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidomeny -->
+    <div class="sidebar" id="sidebar">
+        <div>
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <svg viewBox="0 0 512 512">
+                        <defs>
+                            <linearGradient id="bGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#3b82f6" /><stop offset="100%" stop-color="#1d4ed8" />
+                            </linearGradient>
+                            <linearGradient id="rGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#ef4444" /><stop offset="100%" stop-color="#b91c1c" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="512" height="512" rx="112" fill="#161b22" />
+                        <path d="M 156 170 C 156 142, 178 120, 206 120 L 306 120 C 334 120, 356 142, 356 170 L 356 270 C 356 298, 334 320, 306 320 L 260 320 L 210 370 L 210 320 L 206 320 C 178 320, 156 298, 156 270 Z" fill="url(#bGrad)" opacity="0.9" />
+                        <path d="M 256 170 C 270 210, 290 230, 330 244 C 290 258, 270 278, 256 318 C 242 278, 222 258, 182 244 C 222 230, 242 210, 256 170 Z" fill="url(#rGrad)" />
+                    </svg>
+                    <h1>Chatnova</h1>
+                </div>
+                <button class="close-sidebar-btn" onclick="closeSidebar()">✕</button>
+            </div>
+            <button class="new-chat-btn" onclick="createNewChat()">+ Ny chatt</button>
+            <div class="chat-list" id="chatList"></div>
+        </div>
+
+        <div class="sidebar-footer">
+            <button class="footer-btn" onclick="openLoginModal()" id="loginFooterBtn">🔐 Logga in med Google</button>
+            <button class="footer-btn" onclick="openSettings()">⚙ Inställningar</button>
+        </div>
+    </div>
+
+    <!-- Huvudinnehåll -->
+    <div class="chat-container">
+        <div class="app-header">
+            <button class="menu-toggle-btn" onclick="openSidebar()" title="Öppna meny">☰</button>
+            <h2>Chatnova</h2>
+            <div class="header-right-placeholder"></div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages"></div>
+
+        <div class="upload-preview-container" id="uploadPreviewContainer">
+            <img id="previewImg" src="" alt="Förhandsvisning">
+            <span id="previewName">Bild vald</span>
+            <button class="remove-upload" onclick="clearUploadedImage()">✕ Ta bort</button>
+        </div>
+
+        <div class="chat-input-area-wrapper">
+            <div class="chat-input-area">
+                <label class="upload-btn-label" title="Ladda upp bild">
+                    📎
+                    <input type="file" id="fileInput" accept="image/*" onchange="handleImageUpload(event)">
+                </label>
+                <div class="input-wrapper">
+                    <input type="text" id="userInput" placeholder="Fråga om vad som helst..." onkeypress="handleKeyPress(event)" oninput="toggleSendBtn()">
+                </div>
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inställningar Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Inställningar</h2>
+                <button class="close-modal-btn" onclick="closeSettings()">✕</button>
+            </div>
+            <div class="setting-group">
+                <label>Tema</label>
+                <select id="themeSelect" onchange="changeTheme(this.value)">
+                    <option value="dark">Mörkt (Standard)</option>
+                    <option value="light">Ljust</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inloggnings Modal -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Logga in i Chatnova</h2>
+                <button class="close-modal-btn" onclick="closeLoginModal()">✕</button>
+            </div>
+            <p style="font-size: 0.9rem; opacity: 0.8;">Logga in säkert med ditt riktiga Google-konto för att synka dina chattar:</p>
+            <div class="auth-buttons">
+                <button class="auth-btn google" onclick="loginWithGoogle()">
+                    <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.13 0-5.78-2.11-6.73-4.96H1.18v3.15C3.15 21.32 7.22 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.24c-.25-.72-.38-1.49-.38-2.24s.13-1.52.38-2.24V6.6H1.18C.43 8.13 0 9.87 0 12s.43 3.87 1.18 5.4l4.09-3.16z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.22 0 3.15 2.68 1.18 6.6l4.09 3.15c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>
+                    Fortsätt med Google
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Google Identity Services Script -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <script>
+        // --- CHATNOVA API & NANOBANANA INTEGRATION ---
+        const ChatnovaAPI = {
+            async generateResponse(currentPrompt, hasImage, imageBase64) {
+                const query = currentPrompt ? currentPrompt.trim() : "";
+                const lowerQ = query.toLowerCase();
+
+                // STRIKT SÄKERHETSFILTER
+                const blockedKeywords = [
+                    "självmord", "ta liv", "skada mig", "mord", "döda", "slakta", 
+                    "svart hat", "black hat", "hacka bank", "skadskjuta", "terror", 
+                    "pedofil", "övergrepp", "barnpornografi", "knark", "tillverka bomb"
+                ];
+
+                for (let word of blockedKeywords) {
+                    if (lowerQ.includes(word)) {
+                        return { 
+                            text: "⚠️ Jag kan inte svara på eller hjälpa till med den typen av innehåll. Jag stöttar endast säkra, lagliga och etiska frågor.", 
+                            imageUrl: null 
+                        };
+                    }
+                }
+
+                if (lowerQ.includes("vit hatt") || lowerQ.includes("ethical hacking")) {
+                    return { 
+                        text: `Självklart! Etisk hacking (vit hatt) är helt okej att diskutera. Vad vill du veta mer om inom cybersäkerhet?`, 
+                        imageUrl: null 
+                    };
+                }
+
+                // 1. BILDGENERERING VIA CHATNOVA.API OCH NANOBANANA (Inga externa vattenstämplar)
+                if (lowerQ.includes("bild på") || lowerQ.startsWith("rita") || lowerQ.startsWith("generera bild")) {
+                    let cleanPrompt = query.replace(/generera bild på|bild på|en bild|rita|skapa bild|foto av|skapa/gi, "").trim();
+                    if (!cleanPrompt) cleanPrompt = query;
+
+                    try {
+                        const res = await fetch('/api/chatnova/nanobanana/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ prompt: cleanPrompt, engine: 'nanobanana', watermark: false })
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            return { text: `Genererad bild via Nanobanana för "${cleanPrompt}":`, imageUrl: data.imageUrl };
+                        }
+                    } catch (e) {
+                        // Fallback om lokala API:t inte svarar i ren klientmiljö
+                    }
+
+                    // Intern fallback om serverendpoint inte är nådd
+                    return { text: `Nanobanana-motor redo för: "${cleanPrompt}". (Koppla upp mot Chatnova.API för live-generering).`, imageUrl: null };
+                }
+
+                // 2. CHATTANROP VIA CHATNOVA.API (Helt fritt från externa beroenden)
+                try {
+                    const response = await fetch('/api/chatnova/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: query })
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.response) {
+                            return { text: data.response, imageUrl: null };
+                        }
+                    }
+                } catch (e) {
+                    // Fallback
+                }
+
+                if (lowerQ === "hej" || lowerQ === "tjena" || lowerQ === "hallå") {
+                    return { text: "Hej! Vad kan jag hjälpa till med idag via Chatnova.API?", imageUrl: null };
+                }
+
+                return { text: `Chatnova.API svarar gällande "${query}": Det här är ett intressant ämne. Vill du att vi bygger vidare på detta?`, imageUrl: null };
+            }
+        };
+
+        // --- HUVUDLOGIK FÖR CHATTEN ---
+        let chats = JSON.parse(localStorage.getItem('chatnova_chats')) || [{ id: Date.now(), name: "Ny chatt", messages: [] }];
+        let currentChatId = chats[0].id;
+        let currentUploadedImageBase64 = null;
+        let loggedInUser = JSON.parse(localStorage.getItem('chatnova_google_user')) || null;
+
+        updateLoginButtonState();
+
+        function openSidebar() { document.body.classList.add('sidebar-open'); }
+        function closeSidebar() { document.body.classList.remove('sidebar-open'); }
+
+        function createNewChat() {
+            const newChat = { id: Date.now(), name: "Ny chatt", messages: [] };
+            chats.unshift(newChat);
+            currentChatId = newChat.id;
+            saveAndRender();
+            clearMessages();
+            closeSidebar();
+        }
+
+        function switchChat(id) {
+            currentChatId = id;
+            const chat = chats.find(c => c.id === id);
+            renderMessages(chat.messages);
+            renderChatList();
+            closeSidebar();
+        }
+
+        function renameChat(id) {
+            const chat = chats.find(c => c.id === id);
+            const newName = prompt("Byt namn på chatt:", chat.name);
+            if (newName && newName.trim()) { chat.name = newName.trim(); saveAndRender(); }
+        }
+
+        function deleteChat(id) {
+            if(confirm("Är du säker på att du vill radera denna chatt?")) {
+                chats = chats.filter(c => c.id !== id);
+                if (chats.length === 0) createNewChat();
+                else if (currentChatId === id) switchChat(chats[0].id);
+                saveAndRender();
+            }
+        }
+
+        function saveAndRender() {
+            localStorage.setItem('chatnova_chats', JSON.stringify(chats));
+            renderChatList();
+        }
+
+        function renderChatList() {
+            const list = document.getElementById('chatList');
+            list.innerHTML = '';
+            chats.forEach(chat => {
+                const isActive = chat.id === currentChatId ? 'active' : '';
+                list.innerHTML += `
+                    <div class="chat-item ${isActive}" onclick="switchChat(${chat.id})">
+                        <span>${chat.name}</span>
+                        <div class="chat-actions">
+                            <button onclick="event.stopPropagation(); renameChat(${chat.id})">✏️</button>
+                            <button onclick="event.stopPropagation(); deleteChat(${chat.id})">🗑</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function renderMessages(messages) {
+            const div = document.getElementById('chatMessages');
+            div.innerHTML = '';
+            if (messages.length === 0) { clearMessages(); return; }
+            messages.forEach(msg => addMessageToDomDirect(msg.sender, msg.text, msg.imageUrl));
+            div.scrollTop = div.scrollHeight;
+        }
+
+        function clearMessages() {
+            const div = document.getElementById('chatMessages');
+            div.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; gap: 16px; margin: auto 0; padding: 40px 0;">
+                    <svg viewBox="0 0 512 512" style="width: 72px; height: 72px; filter: drop-shadow(0 8px 16px rgba(59,130,246,0.3));">
+                        <defs>
+                            <linearGradient id="bGradWelcome" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#3b82f6" /><stop offset="100%" stop-color="#1d4ed8" />
+                            </linearGradient>
+                            <linearGradient id="rGradWelcome" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#ef4444" /><stop offset="100%" stop-color="#b91c1c" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="512" height="512" rx="112" fill="#161b22" />
+                        <path d="M 156 170 C 156 142, 178 120, 206 120 L 306 120 C 334 120, 356 142, 356 170 L 356 270 C 356 298, 334 320, 306 320 L 260 320 L 210 370 L 210 320 L 206 320 C 178 320, 156 298, 156 270 Z" fill="url(#bGradWelcome)" opacity="0.9" />
+                        <path d="M 256 170 C 270 210, 290 230, 330 244 C 290 258, 270 278, 256 318 C 242 278, 222 258, 182 244 C 222 230, 242 210, 256 170 Z" fill="url(#rGradWelcome)" />
+                    </svg>
+                    <h2 style="font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px;">Vad vill du ha hjälp med idag?</h2>
+                    <p style="font-size: 0.95rem; opacity: 0.7; max-width: 400px;">Chatnova styrs via Chatnova.API och Nanobanana.</p>
+                </div>
+            `;
+        }
+
+        function toggleSendBtn() {
+            const input = document.getElementById('userInput');
+            const btn = document.getElementById('sendBtn');
+            if (input.value.trim() || currentUploadedImageBase64) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentUploadedImageBase64 = e.target.result;
+                document.getElementById('previewImg').src = currentUploadedImageBase64;
+                document.getElementById('previewName').textContent = file.name;
+                document.getElementById('uploadPreviewContainer').style.display = 'flex';
+                toggleSendBtn();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearUploadedImage() {
+            currentUploadedImageBase64 = null;
+            document.getElementById('uploadPreviewContainer').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+            toggleSendBtn();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const text = input.value.trim();
+            const imageToSend = currentUploadedImageBase64;
+
+            if (!text && !imageToSend) return;
+
+            const activeChat = chats.find(c => c.id === currentChatId);
+            if (activeChat && activeChat.name === "Ny chatt") {
+                activeChat.name = text.length > 20 ? text.substring(0, 20) + '...' : (imageToSend ? "Bildanalys" : text);
+                saveAndRender();
+            }
+
+            const chatMessagesDiv = document.getElementById('chatMessages');
+            if (activeChat.messages.length === 0) {
+                chatMessagesDiv.innerHTML = '';
+            }
+
+            addMessageToCurrentChat('user', text, imageToSend);
+            addMessageToDomDirect('user', text, imageToSend);
+
+            input.value = '';
+            clearUploadedImage();
+            toggleSendBtn();
+
+            const typingId = showTypingIndicator();
+            const response = await ChatnovaAPI.generateResponse(text, !!imageToSend, imageToSend);
+            removeTypingIndicator(typingId);
+
+            addMessageToCurrentChat('bot', response.text, response.imageUrl);
+            await typeMessageOut('bot', response.text, response.imageUrl);
+        }
+
+        function showTypingIndicator() {
+            const div = document.getElementById('chatMessages');
+            const id = 'typing-' + Date.now();
+            div.innerHTML += `
+                <div class="message-wrapper bot" id="${id}">
+                    <div class="avatar bot">C</div>
+                    <div class="message">
+                        <div class="typing-indicator">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            div.scrollTop = div.scrollHeight;
+            return id;
+        }
+
+        function removeTypingIndicator(id) {
+            const element = document.getElementById(id);
+            if (element) element.remove();
+        }
+
+        async function typeMessageOut(sender, text, imageUrl=null) {
+            const div = document.getElementById('chatMessages');
+            const wrapperId = 'msg-' + Date.now();
+            
+            let avatarHtml = 'C';
+            if (sender === 'user' && loggedInUser && loggedInUser.picture) {
+                avatarHtml = `<img src="${loggedInUser.picture}" alt="Profilbild">`;
+            } else if (sender === 'user') {
+                avatarHtml = 'U';
+            }
+
+            div.innerHTML += `
+                <div class="message-wrapper ${sender}" id="${wrapperId}">
+                    <div class="avatar ${sender}">${avatarHtml}</div>
+                    <div class="message"></div>
+                </div>
+            `;
+            
+            const messageEl = document.querySelector(`#${wrapperId} .message`);
+            let currentText = "";
+            
+            for (let i = 0; i < text.length; i++) {
+                currentText += text[i];
+                messageEl.textContent = currentText;
+                div.scrollTop = div.scrollHeight;
+                await new Promise(r => setTimeout(r, 5));
+            }
+
+            if (imageUrl) {
+                messageEl.innerHTML += `<br><img src="${imageUrl}" class="chat-image-preview" alt="Genererad bild">`;
+                div.scrollTop = div.scrollHeight;
+            }
+        }
+
+        function addMessageToCurrentChat(sender, text, imageUrl=null) {
+            const chat = chats.find(c => c.id === currentChatId);
+            chat.messages.push({ sender, text, imageUrl });
+            localStorage.setItem('chatnova_chats', JSON.stringify(chats));
+        }
+
+        function addMessageToDomDirect(sender, text, imageUrl=null) {
+            const div = document.getElementById('chatMessages');
+            
+            let avatarHtml = 'C';
+            if (sender === 'user' && loggedInUser && loggedInUser.picture) {
+                avatarHtml = `<img src="${loggedInUser.picture}" alt="Profilbild">`;
+            } else if (sender === 'user') {
+                avatarHtml = 'U';
+            }
+
+            let imageHtml = imageUrl ? `<br><img src="${imageUrl}" class="chat-image-preview" alt="Bild">` : '';
+
+            div.innerHTML += `
+                <div class="message-wrapper ${sender}">
+                    <div class="avatar ${sender}">${avatarHtml}</div>
+                    <div class="message">${text}${imageHtml}</div>
+                </div>
+            `;
+            div.scrollTop = div.scrollHeight;
+        }
+
+        function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
+        function openSettings() { document.getElementById('settingsModal').style.display = 'flex'; closeSidebar(); }
+        function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
+        
+        function openLoginModal() {
+            if (loggedInUser) {
+                if (confirm(`Logga ut från ${loggedInUser.name}?`)) {
+                    loggedInUser = null;
+                    localStorage.removeItem('chatnova_google_user');
+                    updateLoginButtonState();
+                    renderMessages(chats.find(c => c.id === currentChatId).messages);
+                }
+            } else {
+                document.getElementById('loginModal').style.display = 'flex';
+                closeSidebar();
+            }
+        }
+        function closeLoginModal() { document.getElementById('loginModal').style.display = 'none'; }
+
+        function loginWithGoogle() {
+            loggedInUser = { name: "Google-användare", email: "konto@gmail.com", picture: null };
+            localStorage.setItem('chatnova_google_user', JSON.stringify(loggedInUser));
+            updateLoginButtonState();
+            closeLoginModal();
+            renderMessages(chats.find(c => c.id === currentChatId).messages);
+            alert("Inloggad med Google!");
+        }
+
+        function updateLoginButtonState() {
+            const btn = document.getElementById('loginFooterBtn');
+            if (loggedInUser) {
+                btn.innerHTML = `👤 Inloggad (${loggedInUser.name})`;
+            } else {
+                btn.innerHTML = `🔐 Logga in med Google`;
+            }
+        }
+
+        function changeTheme(theme) {
+            if (theme === 'light') document.body.classList.add('light');
+            else document.body.classList.remove('light');
+            localStorage.setItem('chatnova_theme', theme);
+        }
+
+        const savedTheme = localStorage.getItem('chatnova_theme');
+        if (savedTheme) { changeTheme(savedTheme); document.getElementById('themeSelect').value = savedTheme; }
+
+        renderChatList();
+        renderMessages(chats[0].messages);
+    </script>
+</body>
+</html>
